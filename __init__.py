@@ -1,15 +1,22 @@
 import eg
 import requests
 import json
+import pycurl
+import StringIO
+import urllib
+try:
+    from io import BytesIO
+except ImportError:
+    from StringIO import StringIO as BytesIO
 
 eg.RegisterPlugin(
     name = "Wink Plugin",
     author = "Alexandre Fournier",
-    version = "0.1.0",
+    version = "0.2.0",
     kind = "other",
     description = "This is a plugin to control Wink devices like the Wink app",
     createMacrosOnAdd = True,
-    icon=("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")
+    icon=("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABAElEQVQ4T53TwUoCURjF8Z9XCfItmqFNtugZooVRj2FUG8UXKQgiJF8jSJCeoYW0K2rvXhCSNndkGmdU/O/unXPO/ebe76slo6kCR+jgHAdx7wuvGOIjL67lAvZwh1uEYmpkgWf0MYNGzvyCswpjRsA1DmOF8+yk+zJzN93XTfdXYziN1WqgFVNXzL20uVw/fM6Kkhs8hXhh9XXmXtosq6SOTkB7nTmjIqQdkBSFVZR8S6qea1vmITbJrvyE2GG7Mq4lo+kx3osvsQW/OAmYYLBJXcIAk+wS+xhvMOR5i57l0Mxxgcc4MFUs4smX0fNvGjNauIoNlkThd6xwGH95yR9ZTDgHaQ8loAAAAABJRU5ErkJggg==")
 )
 
 class WinkUser():
@@ -28,27 +35,42 @@ class Device():
 		return self.id + " " + self.alias + " : " + self.type + " @ " + self.url
         
 class LightBulbState():
-    def __init__(self, powered=false, brightness=0):
+    def __init__(self, powered=False, brightness=0):
 		self.powered = powered
 		self.brightness = brightness
+    
+    def toString(self):
+        if(self.powered == True):
+            b = str(self.brightness)
+            return "ON:" + b
+        return "OFF"
         
 class Authenticate(eg.ActionBase):
     name = "Authenticate"
     description = "This action will authenticate the user with the Wink API"
     def __call__(self):
-	print("Authenticating...")
-	self.url = "https://api.wink.com/oauth2/token"
-	self.data = {
-        "client_id": "512d1e06a9cc39d0e49b09b0809c9f73",
-        "client_secret": "1b71a6cdbd2910bf191d0d981711f31b",
-        "grant_type": "password",
-        "username": self.plugin.username,
-        "password": self.plugin.password
-      }
-	self.headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-	
-	self.r = requests.post(self.url, data=json.dumps(self.data), headers=self.headers, verify=False)
-	self.plugin.token = json.loads(self.r.text)['data']['access_token']
+        print("Authenticating...")
+        url = "https://api.wink.com/oauth2/token"
+        data = {
+            "client_id": "512d1e06a9cc39d0e49b09b0809c9f73",
+            "client_secret": "1b71a6cdbd2910bf191d0d981711f31b",
+            "grant_type": "password",
+            "username": self.plugin.username,
+            "password": self.plugin.password}
+        buffer = BytesIO()
+        b = StringIO.StringIO()
+        c = pycurl.Curl()
+        c.setopt(c.URL, url)
+        c.setopt(pycurl.HTTPHEADER,['Content-Type: application/json'])
+        c.setopt(c.WRITEDATA, buffer)
+        c.setopt(pycurl.WRITEFUNCTION, b.write)
+        c.setopt(c.POSTFIELDS, json.dumps(data))
+        c.perform()
+        c.close()
+        
+        r = b.getvalue()
+        print(json.loads(r)['data']['access_token'])
+        self.plugin.token = "Bearer " + json.loads(r)['data']['access_token']
 		
 
 class GetDeviceList(eg.ActionBase):
@@ -60,22 +82,34 @@ class GetDeviceList(eg.ActionBase):
         try:
             #Options
             url = "https://api.wink.com/users/me/wink_devices"
-            headers = {'Authorization': 'Bearer ' + self.plugin.token, 'Content-type': 'application/json', 'Accept': 'text/plain'}
+            
             #Get device list
-            r = requests.get(url, headers=headers, verify=False)'
-            deviceList = json.loads(r.text)['data']
+            buffer = BytesIO()
+            c = pycurl.Curl()
+            c.setopt(c.URL, url)
+            c.setopt(pycurl.HTTPHEADER,['Authorization: ' + self.plugin.token, 'Content-Type: application/json'])
+            c.setopt(c.WRITEFUNCTION, buffer.write)
+            c.perform()
+            c.close()
+            
+            r = buffer.getvalue()
+            deviceList = json.loads(r)['data']
             
             self.plugin.devices = []
             self.plugin.deviceAlias = []
+            count = str(len(deviceList))
+            
             for device in deviceList:
-                if(hasattr(device, "light_bulb_id")):
+                if "light_bulb_id" in device:
                     state = device['desired_state']
                     device = Device(device['light_bulb_id'], device['name'], state, "Light Bulb")
                     self.plugin.devices.append(device)
                     self.plugin.deviceAlias.append(device.alias)
+            count = str(len(self.plugin.deviceAlias))
+            print("Saved " + count + " devices")
         except AttributeError:
             eg.PrintError("Something went wrong. Please make sure you called Authenticate!")
-
+          
 class GetLightBulbState(eg.ActionBase):
     name = "Get Light Bulb State"
     description ="Retrieves the state of the light bulb and its brightness"
@@ -87,10 +121,20 @@ class GetLightBulbState(eg.ActionBase):
             
             #Get current state
             url = "https://api.wink.com/light_bulbs/" + device.id
-            headers = {'Authorization': 'Bearer ' + self.plugin.token, 'Content-type': 'application/json', 'Accept': 'text/plain'}
-            r = requests.get(url, headers=headers, verify=False)
-            response = json.loads(r.text)['result']['responseData']
-            currentState = json.loads(response)["desired_state"]
+            
+            #Get device state
+            buffer = BytesIO()
+            c = pycurl.Curl()
+            c.setopt(c.URL, url)
+            c.setopt(pycurl.HTTPHEADER,['Authorization: ' + self.plugin.token, 'Content-Type: application/json'])
+            c.setopt(c.WRITEFUNCTION, buffer.write)
+            c.perform()
+            c.close()
+            
+            r = buffer.getvalue()
+            response = json.loads(r)['data']
+            currentState = response["desired_state"]
+            print(currentState)
             if(currentState['powered'] == False):
                 state = "OFF"
             else:
@@ -99,7 +143,9 @@ class GetLightBulbState(eg.ActionBase):
             print "State is " + state
             
             #Dispatch Event
-            self.plugin.TriggerEvent("WinkLightBulbStateEvent", LightBulbState(currentState['powered'] == false, currentState['brightness']))            
+            deviceState = LightBulbState(currentState['powered'] == True, currentState['brightness'])
+            message = device.alias + " is " + deviceState.toString()
+            self.plugin.TriggerEvent("WinkLightBulbStateEvent", message)            
         except AttributeError as attrErr:
             eg.PrintError("Something went wrong. Please make sure you called Authenticate and Get Device List! Error ")
             eg.PrintError(attrErr)
@@ -132,12 +178,33 @@ class SetLightBulbState(eg.ActionBase):
         print("Changing device state...")
         try:
             device = self.plugin.devices[deviceIndex]
-            newState = str(state)
+            
             #Options
             url = "https://api.wink.com/light_bulbs/" + device.id
-            headers = {'Authorization': 'Bearer ' + self.plugin.token, 'Content-type': 'application/json', 'Accept': 'text/plain'}
-            #Get device list
-            r = requests.put(url, data=json.dumps(state), headers=headers, verify=False)
+            
+            data = {
+                    "desired_state": {
+                      "powered": state.powered,
+                      "brightness": state.brightness
+                    }
+                  }
+                  
+            #Set state
+            buffer = BytesIO()
+            b = StringIO.StringIO()
+            c = pycurl.Curl()
+            c.setopt(c.URL, url)
+            c.setopt(pycurl.HTTPHEADER,['Authorization: ' + self.plugin.token, 'Content-Type: application/json'])
+            c.setopt(pycurl.CUSTOMREQUEST, "PUT")
+            c.setopt(pycurl.POST, 1)
+            c.setopt(c.WRITEDATA, buffer)
+            c.setopt(pycurl.WRITEFUNCTION, b.write)
+            c.setopt(c.POSTFIELDS, json.dumps(data))
+            c.perform()
+            c.close()
+            
+            r = b.getvalue()
+            print(r)
         except AttributeError:
             eg.PrintError("Something went wrong. Please make sure you called Authenticate and Get Device List!")
         
@@ -146,32 +213,33 @@ class SetLightBulbState(eg.ActionBase):
             panel = eg.ConfigPanel()
             device = self.plugin.devices[deviceIndex]
            
-            self.label1 = wx.StaticText(panel,label = "Select Device" ,style = wx.ALIGN_LEFT) 
-            panel.sizer.Add(self.label1, 0 , wx.ALIGN_LEFT)
+            self.labelDevice = wx.StaticText(panel,label = "Select Device" ,style = wx.ALIGN_LEFT) 
+            panel.sizer.Add(self.labelDevice, 0 , wx.ALIGN_LEFT)
             
             self.deviceCombo = wx.ComboBox(panel, -1, size=(150, -1), value=device.alias,choices=self.plugin.deviceAlias)
             panel.sizer.Add(self.deviceCombo, 0, wx.ALIGN_CENTER_VERTICAL)
             
-            self.label1 = wx.StaticText(panel,label = "Select State" ,style = wx.ALIGN_LEFT) 
-            panel.sizer.Add(self.label1, 0, wx.ALIGN_LEFT, 20)
+            self.labelState = wx.StaticText(panel,label = "Select State" ,style = wx.ALIGN_LEFT) 
+            panel.sizer.Add(self.labelState, 0, wx.ALIGN_LEFT, 20)
             
             self.states = ["OFF", "ON"]        
-            self.stateCombo = wx.ComboBox(panel, -1, size=(150, -1), value=self.states[state], choices=self.states)
+            self.stateCombo = wx.ComboBox(panel, -1, size=(150, -1), value="ON", choices=self.states)
             panel.sizer.Add(self.stateCombo, 0, wx.ALIGN_LEFT)
             
-            self.label1 = wx.StaticText(panel,label = "Select Brightness" ,style = wx.ALIGN_LEFT) 
-            panel.sizer.Add(self.label1, 0, wx.ALIGN_LEFT, 20)
+            self.labelBrightness = wx.StaticText(panel,label = "Select Brightness" ,style = wx.ALIGN_LEFT) 
+            panel.sizer.Add(self.labelBrightness, 0, wx.ALIGN_LEFT, 20)
             
-            self.brightnessSlider = wx.Slider(panel, -1, size=(150, -1), value=state.brightness, minValue=0, maxValue=100)
-            panel.sizer.Add(self.stateCombo, 0, wx.ALIGN_LEFT)
+            self.brightnessSlider = wx.Slider(panel, -1, size=(150, -1), value=state.brightness, minValue=0, maxValue=100, style = wx.SL_HORIZONTAL|wx.SL_LABELS)
+            panel.sizer.Add(self.brightnessSlider, 0, wx.ALIGN_LEFT)
             
             while panel.Affirmed():
                 powered = True
                 if(self.stateCombo.GetCurrentSelection() == 0):
                     powered = False
                     
-                brightness = brightnessSlider.getValue()
+                brightness = self.brightnessSlider.GetValue()
                 state = LightBulbState(powered, brightness)
+                print(state.toString())
                 deviceIndex = self.deviceCombo.GetCurrentSelection()
                 panel.SetResult(deviceIndex, state)
         except AttributeError:
@@ -188,10 +256,19 @@ class ToggleLightBulbDeviceState(eg.ActionBase):
             
             #Get current state
             url = "https://api.wink.com/light_bulbs/" + device.id
-            headers = {'Authorization': 'Bearer ' + self.plugin.token, 'Content-type': 'application/json', 'Accept': 'text/plain'}
-            r = requests.get(url, headers=headers, verify=False)
-            response = json.loads(r.text)['result']['responseData']
-            currentState = json.loads(response)["desired_state"]
+            
+            #Get device state
+            buffer = BytesIO()
+            c = pycurl.Curl()
+            c.setopt(c.URL, url)
+            c.setopt(pycurl.HTTPHEADER,['Authorization: ' + self.plugin.token, 'Content-Type: application/json'])
+            c.setopt(c.WRITEFUNCTION, buffer.write)
+            c.perform()
+            c.close()
+            
+            r = buffer.getvalue()
+            response = json.loads(r)['data']
+            currentState = response["desired_state"]
             
             if(currentState['powered'] == False):
                 newState = LightBulbState(True, currentState['brightness'])
@@ -200,9 +277,32 @@ class ToggleLightBulbDeviceState(eg.ActionBase):
                 newState = LightBulbState(False, currentState['brightness'])
                 print "Will turn " + device.alias + " on"
             
+            #Options
             url = "https://api.wink.com/light_bulbs/" + device.id
-            headers = {'Authorization': 'Bearer ' + self.plugin.token, 'Content-type': 'application/json', 'Accept': 'text/plain'}
-            r = requests.put(url, data=json.dumps(newState), headers=headers, verify=False)
+            
+            data = {
+                    "desired_state": {
+                      "powered": newState.powered,
+                      "brightness": newState.brightness
+                    }
+                  }
+            
+            #Set state
+            buffer = BytesIO()
+            b = StringIO.StringIO()
+            c = pycurl.Curl()
+            c.setopt(c.URL, url)
+            c.setopt(pycurl.HTTPHEADER,['Authorization: ' + self.plugin.token, 'Content-Type: application/json'])
+            c.setopt(pycurl.CUSTOMREQUEST, "PUT")
+            c.setopt(pycurl.POST, 1)
+            c.setopt(c.WRITEDATA, buffer)
+            c.setopt(pycurl.WRITEFUNCTION, b.write)
+            c.setopt(c.POSTFIELDS, json.dumps(data))
+            c.perform()
+            c.close()
+            
+            r = b.getvalue()
+            print(r)
         except AttributeError:
             eg.PrintError("Something went wrong. Please make sure you called Authenticate and Get Device List!")
         
@@ -233,7 +333,7 @@ class WinkPlugin(eg.PluginBase):
 	  self.AddAction(GetDeviceList)
 	  self.AddAction(GetLightBulbState)
 	  self.AddAction(SetLightBulbState)
-	  self.AddAction(ToggleDeviceState)
+	  self.AddAction(ToggleLightBulbDeviceState)
 
 	def __start__(self, winkUser):
 			print "Wink Plugin is started with user: " + winkUser.username + " boiiiiiiiiiii"
